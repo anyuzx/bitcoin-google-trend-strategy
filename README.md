@@ -8,3 +8,8 @@ This strategy can be summarized as the following:
 * When the relative change of google trend data for `bitcoin` is negative: SELL
 
 The only parameters is the `delta_t`, which is used to compute the relative change of google trends data.
+
+```
+THIS IS JUST A SIMPLE DEMO. NOT A TRADING ALGO. NO STATISTICAL TEST HAS BEEN DONE.
+```
+
