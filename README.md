@@ -10,6 +10,7 @@ This strategy (version 1) can be summarized as the following:
 
 The only parameters is the `delta_t`, which is used to compute the relative change of google trends data.
 
+<<<<<<< HEAD
 The script also includes a improved version which can be summarized as the following:
 
 * When the relative change **ratio**, r, is positive: BUY using f(r) percentage of the available cash
@@ -19,3 +20,9 @@ f(r) is a shifted sigmoid function with parameter `scale`.
 
 ## Result
 [Imgur](https://i.imgur.com/Y7sUq96.png)
+=======
+```
+THIS IS JUST A SIMPLE DEMO. NOT A TRADING ALGO. NO STATISTICAL TEST HAS BEEN DONE.
+```
+
+>>>>>>> 375e6343b28ea7d929fbe1e958bb4d6976d1a06c

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 # use pytrends package https://github.com/GeneralMills/pytrends
-# 导入 pytrends 包
+# 导入 pytrends
 import pytrends
 from pytrends.request import TrendReq
 
