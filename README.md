@@ -22,7 +22,7 @@ f(r) is a shifted sigmoid function with parameter `scale`.
 Version 3 is similar to version 2. But the parameters are separated in BULL and BEAR market. BULL/BEAR are determined by the derivative of the google trends data after applied a savgol fitering.
 
 ## Result
-![Imgur](https://i.imgur.com/Y7sUq96.png)
+![Imgur](https://i.imgur.com/983CgUf.png)
 
 There is also a jupyter notebook for illustration.
 
