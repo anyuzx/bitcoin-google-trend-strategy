@@ -6,6 +6,9 @@ import pandas as pd
 import pytrends
 from pytrends.request import TrendReq
 
+import matplotlib
+import matplotlib.pyplot as plt
+
 # ---------------------------------------------------------------------------------------------
 # 这个是个简单的用google trend做的交易策略
 # 参考这篇文章 https://www.nature.com/articles/srep01684?message-global=remove&utm_source=buffer&utm_medium=twitter&utm_campaign=Buffer:%252BWardPlunet%252Bon%252Btwitter&buffer_share=23ec0&error=cookies_not_supported
@@ -27,7 +30,7 @@ from pytrends.request import TrendReq
 
 google_trend_data = []
 trends = TrendReq(hl = 'en-US', tz = 360)
-trends.build_payload(['bitcoin'], cat = 0, timeframe = '2017-06-01 2018-02-05', gprop = '')
+trends.build_payload(['bitcoin'], cat = 0, timeframe = '2017-06-01 2018-02-06', gprop = '')
 google_trend_data.append(trends.interest_over_time())
 trends.build_payload(['bitcoin'], cat = 0, timeframe = '2017-01-01 2017-06-01', gprop = '')
 google_trend_data.append(trends.interest_over_time())
@@ -83,7 +86,7 @@ trend_array = 100.0 * trend_array/trend_array.max()
 # 这里是从coindesk网站下载的csv文件
 # 当然也可以用coinmarketcap提供的API
 
-btc_price = pd.read_csv('coindesk-bpi-USD-close_data-2010-07-17_2018-02-05.csv')
+btc_price = pd.read_csv('coindesk-bpi-USD-close_data-2010-07-17_2018-02-06.csv')
 # we only need the price data from 2011-01-01 to 2018-01-09
 # 因为google trend的数据是从2011-01-01开始的, 所以我们只需要一部分的价格数据
 btc_price = btc_price[167:-2] 
@@ -115,9 +118,9 @@ def compute_relative_change(trend_array, delta_t):
 
 # define function to compute percentage of buy and sell based on
 # the relative change ratio
-# scale is the controlled parameter
-def sigmoid(x, scale):
-    return 2.0/(1.0 + np.exp(-x/scale)) - 1.0
+# scale and shift are the controlled parameters
+def sigmoid(x, scale, shift = 0.0):
+    return 2.0/(1.0 + np.exp(-(x - shift)/scale)) - 1.0
 
 # version 1
 # buy and sell according to the sign of relative change
@@ -205,6 +208,84 @@ def trade_v2(price_array, trend_array, delta_t, scale):
     PRICE = np.array(PRICE)/price0
     return PRICE, ASSET, ACTION
 
+# version 3
+# buy and sell according to the ratio of relative change
+# apply different parameters for bull and bear market
+def trade_v3(price_array, trend_array, delta_t, scale_bull, scale_bear, shift_bull, shift_bear):
+    _, relative_change_ratio = compute_relative_change(trend_array, delta_t)
+    trend_smooth = scipy.signal.savgol_filter(trend_array,51,1)
+    bull_bear_indicator = trend_smooth[1:] - trend_smooth[:-1]
+    
+    cash0 = 1.0
+    cash = cash0
+    num_btc = 0.0
+    price = 0.0
+    asset = cash + num_btc * price
+    ASSET = []
+    PRICE = []
+    ACTION = []
+    for index, change in enumerate(relative_change_ratio):
+        if index == 0:
+            price0 = price_array[delta_t + index]
+            
+        price = price_array[delta_t + index]
+
+        if change < 0.0:
+            # sell
+            ACTION.append('sell')
+            
+            if bull_bear_indicator[index] > 0.0:
+                # bull market
+                temp = sigmoid(change, scale = scale_bull, shift = shift_bull)
+                if temp <= 0.0:
+                    sell_ratio = np.abs(temp)
+                else:
+                    sell_ratio = 0.0
+                #sell_ratio = np.abs(sigmoid(change, scale = scale_bull, shift = shift_bull))
+            else:
+                # bear market
+                temp = sigmoid(change, scale = scale_bear, shift = shift_bear)
+                if temp <= 0.0:
+                    sell_ratio = np.abs(temp)
+                else:
+                    sell_ratio = 0.0
+                #sell_ratio = np.abs(sigmoid(change, scale = scale_bear, shift = shift_bear))
+            
+            if num_btc > 0.0:
+                cash += sell_ratio * num_btc * price
+                num_btc = num_btc * (1.0 - sell_ratio)
+        else:
+            # buy
+            ACTION.append('buy')
+            
+            if bull_bear_indicator[index] > 0.0:
+                # bull market
+                temp = sigmoid(change, scale = scale_bull, shift = shift_bull)
+                if temp >= 0.0:
+                    buy_ratio = np.abs(temp)
+                else:
+                    buy_ratio = 0.0
+                #buy_ratio = np.abs(sigmoid(change, scale = scale_bull, shift = shift_bull))
+            else:
+                # bear market
+                temp = sigmoid(change, scale = scale_bull, shift = shift_bear)
+                if temp >= 0.0:
+                    buy_ratio = np.abs(temp)
+                else:
+                    buy_ratio = 0.0
+                #buy_ratio = np.abs(sigmoid(change, scale = scale_bear))
+
+            if cash > 0.0:
+                num_btc += cash * buy_ratio / price
+                cash = cash * (1.0 - buy_ratio)
+
+        asset = cash + num_btc * price
+        ASSET.append(asset)
+        PRICE.append(price)
+
+    ASSET = np.array(ASSET)/cash0
+    PRICE = np.array(PRICE)/price0
+    return PRICE, ASSET, ACTION
 
 # TEST AND PLOT
 # 测试,画图
@@ -213,14 +294,17 @@ def trade_v2(price_array, trend_array, delta_t, scale):
 # delta_t = 50 is the optimal
 hold, strategy1, _ = trade_v1(btc_price, trend_array, delta_t = 50)
 _, strategy2, _ = trade_v2(btc_price, trend_array, delta_t = 50, scale = 0.2)
+_, strategy3, _ = trade_v3(btc_price, trend_array, delta_t = 50, \
+                                 scale_bull = 0.000, scale_bear = 0.3, \
+                                 shift_bull = -0.1, shift_bear = -0.1)
 
 fig, ax = plt.subplots()
 ax.plot(np.arange(len(hold)), hold, label='Buy and Hold')
 ax.plot(np.arange(len(strategy1)), strategy1, label='Google Trends Strategy v1')
 ax.plot(np.arange(len(strategy2)), strategy2, label='Google Trends Strategy v2')
+ax.plot(np.arange(len(strategy3)), strategy3, label='Google Trends Strategy v3')
 ax.set_xlabel('days')
 ax.set_ylabel('Return')
 ax.set_yscale('log')
 plt.legend(loc='upper left', frameon=False)
 plt.show()
-
